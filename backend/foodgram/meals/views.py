@@ -224,7 +224,7 @@ def download_shopping_cart(request):
     recipe_num = 1
     ingredient_sum = {}
     measurement_unit_sum = {}
-    writer.writerow(['Shopping list',])
+    writer.writerow(['Shopping list', ])
     writer.writerow([])
     for row_from_shopping_cart in shopping_cart:
         recipe = row_from_shopping_cart.recipe
