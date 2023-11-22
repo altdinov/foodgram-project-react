@@ -39,7 +39,7 @@ class User(AbstractUser):
         max_length=150,
         verbose_name='Password',
         help_text='Password, maximum 150 characters'
-        )
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ('username', 'first_name', 'last_name')
