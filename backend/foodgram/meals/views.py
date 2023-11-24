@@ -1,8 +1,5 @@
-import csv
-
 from django.db import models
 from django.http import HttpResponse
-from django.shortcuts import render
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -23,6 +20,7 @@ from .serializers import (
     ShoppingCartSerializer,
     TagSerializer
 )
+from .utils import generate_file
 
 
 class TagViewSet(mixins.ListModelMixin,
@@ -64,7 +62,6 @@ class RecipeViewSet(mixins.ListModelMixin,
                     viewsets.GenericViewSet):
     """Recipe ViewSet"""
     filter_backends = (DjangoFilterBackend, filters.OrderingFilter,)
-    ordering = ('-id',)
     pagination_class = PaginationWithLimit
     filterset_class = RecipeFilter
     filterset_fields = (
@@ -72,22 +69,22 @@ class RecipeViewSet(mixins.ListModelMixin,
     )
 
     def get_serializer_class(self):
-        if self.action == 'create' or self.action == 'partial_update':
+        if self.action in ('create', 'partial_update'):
             return RecipeSerializerForWrite
         return RecipeSerializer
 
     def get_permissions(self):
         if self.action == 'create':
             return (permissions.IsAuthenticated(),)
-        if self.action == 'partial_update' or self.action == 'destroy':
+        if self.action in ('partial_update', 'destroy'):
             return (OwnerOrReadOnly(),)
         return (permissions.AllowAny(),)
 
     def update(self, *args, **kwargs):
-        raise MethodNotAllowed('POST', detail='Use PATCH')
+        raise MethodNotAllowed('PUT', detail='Use PATCH')
 
     def partial_update(self, *args, **kwargs):
-        return super().update(*args, **kwargs, partial=True)
+        return super().update(*args, **kwargs)
 
     def get_queryset(self):
         # Adding annotations for filtering
@@ -101,24 +98,22 @@ class RecipeViewSet(mixins.ListModelMixin,
         else:
             is_favorited = Favorite.objects.none()
             is_in_shopping_cart = ShoppingCart.objects.none()
-        return Recipe.objects.all().annotate(
+        return Recipe.objects.all().prefetch_related(
+            'author', 'tags', 'ingredients', 'ingredients__product').annotate(
             is_favorited=models.Exists(is_favorited),
             is_in_shopping_cart=models.Exists(is_in_shopping_cart)
         )
 
 
-class FavoriteViewSet(ModelViewSet):
-    """Favorite ViewSet"""
-    serializer_class = FavoriteSerializer
-    permission_classes = (permissions.IsAuthenticated,)
-    pagination_class = None
-    ordering = ('-id',)
+class FavoriteAndShopCartMixin:
+    """Mixin for Favorite and Shopping Cart"""
+    use_model = None
+    object_alredy_added_text = None
+    cannot_remove_text = None
 
     def _get_recipe(self):
-        # Throw exception 400 if there is no recipe
-        try:
-            recipe = Recipe.objects.get(id=self.kwargs.get('recipe_id'))
-        except Recipe.DoesNotExist:
+        recipe = Recipe.objects.filter(id=self.kwargs.get('recipe_id')).first()
+        if recipe is None:
             raise ValidationError({'detail': 'The recipe does not exist'})
         return recipe
 
@@ -131,8 +126,8 @@ class FavoriteViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
         recipe = self._get_recipe()
         user = request.user
-        if Favorite.objects.filter(recipe=recipe, user=user).exists():
-            data = {'detail': 'The recipe has already been added to favorites'}
+        if self.use_model.objects.filter(recipe=recipe, user=user).exists():
+            data = {'detail': self.object_alredy_added_text}
             return Response(data, status=status.HTTP_400_BAD_REQUEST, )
         serializer.save(recipe=recipe, user=user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -141,69 +136,37 @@ class FavoriteViewSet(ModelViewSet):
     def delete(self, request, *args, **kwargs):
         recipe = self._get_recipe()
         user = request.user
-        favorite = Favorite.objects.filter(recipe=recipe, user=user).first()
+        favorite = self.use_model.objects.filter(
+            recipe=recipe, user=user
+            ).first()
         if favorite:
             favorite.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            data = {
-                'detail':
-                ('You cannot remove a recipe from favorites '
-                 'that has not yet been added there')
-            }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        data = {'detail': self.cannot_remove_text}
+        return Response(data, status=status.HTTP_400_BAD_REQUEST, )
 
 
-class ShoppingCartViewSet(ModelViewSet):
+class FavoriteViewSet(FavoriteAndShopCartMixin, ModelViewSet):
+    """Favorite ViewSet"""
+    serializer_class = FavoriteSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    pagination_class = None
+    use_model = Favorite
+    object_alredy_added_text = 'The recipe has already been added to favorites'
+    cannot_remove_text = ('You cannot remove a recipe from favorites '
+                          'that has not yet been added there')
+
+
+class ShoppingCartViewSet(FavoriteAndShopCartMixin, ModelViewSet):
     """Shopping cart ViewSet"""
     serializer_class = ShoppingCartSerializer
     permission_classes = (permissions.IsAuthenticated,)
     pagination_class = None
-    ordering = ('-id',)
-
-    def _get_recipe(self):
-        # Throw exception 400 if there is no recipe
-        try:
-            recipe = Recipe.objects.get(id=self.kwargs.get('recipe_id'))
-        except Recipe.DoesNotExist:
-            raise ValidationError({'detail': 'The recipe does not exist'})
-        return recipe
-
-    def get_queryset(self):
-        recipe = self._get_recipe()
-        return recipe.shopping_cart.all()
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        recipe = self._get_recipe()
-        user = request.user
-        if ShoppingCart.objects.filter(recipe=recipe, user=user).exists():
-            data = {
-                'detail':
-                'The recipe has already been added to the shopping list'
-            }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
-        serializer.save(recipe=recipe, user=user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @action(detail=False, methods=['delete'])
-    def delete(self, request, *args, **kwargs):
-        recipe = self._get_recipe()
-        user = request.user
-        shopping_cart = ShoppingCart.objects.filter(
-            recipe=recipe, user=user
-        ).first()
-        if shopping_cart:
-            shopping_cart.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            data = {
-                'detail':
-                ('You cannot remove something from your shopping '
-                 'list that has not yet been added there.')
-            }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+    use_model = ShoppingCart
+    object_alredy_added_text = ('he recipe has already been added '
+                                'to the shopping list')
+    cannot_remove_text = ('You cannot remove something from your shopping '
+                          'list that has not yet been added there.')
 
 
 @api_view(['GET'])
@@ -217,47 +180,4 @@ def download_shopping_cart(request):
             'attachment; filename="somefilename.csv"'
         },
     )
-    shopping_cart = ShoppingCart.objects.select_related('recipe').filter(
-        user=request.user
-    )
-    writer = csv.writer(response)
-    recipe_num = 1
-    ingredient_sum = {}
-    measurement_unit_sum = {}
-    writer.writerow(['Shopping list', ])
-    writer.writerow([])
-    for row_from_shopping_cart in shopping_cart:
-        recipe = row_from_shopping_cart.recipe
-        row = ['Recipe #', recipe_num, recipe.name]
-        writer.writerow(row)
-        ingredient_num = 1
-        for ingredient in recipe.ingredients.all():
-            row = [
-                ingredient_num,
-                ingredient.product.name,
-                ingredient.amount,
-                ingredient.product.measurement_unit
-            ]
-            writer.writerow(row)
-            if ingredient.product.name in ingredient_sum.keys():
-                ingredient_sum[ingredient.product.name] += ingredient.amount
-            else:
-                ingredient_sum[ingredient.product.name] = ingredient.amount
-                measurement_unit_sum[
-                    ingredient.product.name
-                ] = ingredient.product.measurement_unit
-            ingredient_num += 1
-        writer.writerow([])
-        recipe_num += 1
-    writer.writerow(['Sum'])
-    ingredient_num = 1
-    for product, amount in ingredient_sum.items():
-        row = [ingredient_num, product, amount, measurement_unit_sum[product]]
-        writer.writerow(row)
-        ingredient_num += 1
-    return response
-
-
-def page_not_found(request, exception):
-    """Custom page 404"""
-    return render(request, 'meals/404.html', status=404)
+    return generate_file(request, response)

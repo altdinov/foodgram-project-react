@@ -10,6 +10,7 @@ from meals.pagination import PaginationWithLimit
 from .models import Subscription, User
 from .serializers import (
     ChangePasswordSerializer,
+    SubscribeSerializer,
     SubscriptionSerializer,
     UserCreateSerializer,
     UserSerializer
@@ -48,20 +49,19 @@ class UserViewSet(mixins.ListModelMixin,
 @permission_classes([permissions.IsAuthenticated])
 def change_password(request):
     """API View for change password, endpoint users/set_password/"""
-    if request.method == 'POST':
-        serializer = ChangePasswordSerializer(data=request.data)
-        if serializer.is_valid():
-            user = request.user
-            if user.check_password(serializer.data.get('current_password')):
-                user.set_password(serializer.data.get('new_password'))
-                user.save()
-                update_session_auth_hash(request, user)
-                return Response(status=status.HTTP_204_NO_CONTENT)
-            return Response(
-                {'error': 'Incorrect old password.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer = ChangePasswordSerializer(data=request.data)
+    if serializer.is_valid():
+        user = request.user
+        if user.check_password(serializer.data.get('current_password')):
+            user.set_password(serializer.data.get('new_password'))
+            user.save()
+            update_session_auth_hash(request, user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {'error': 'Incorrect old password.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class SubscriptionViewSet(mixins.ListModelMixin,
@@ -80,10 +80,8 @@ class SubscriptionViewSet(mixins.ListModelMixin,
 
 class SubscribeViewSet(ModelViewSet):
     """Subscribe ViewSet"""
-    queryset = Subscription.objects.all()
-    serializer_class = SubscriptionSerializer
+    serializer_class = SubscribeSerializer
     permission_classes = (permissions.IsAuthenticated,)
-    pagination_class = None
 
     def _get_user(self):
         """The function returns the user who will be subscribed to"""
@@ -93,18 +91,14 @@ class SubscribeViewSet(ModelViewSet):
         return subscription_to_user
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        subscription_to_user = self._get_user()
         user = request.user
-        if subscription_to_user == user:
-            data = {'detail': "You can't subscribe to yourself"}
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
-        if Subscription.objects.filter(
-            user=user, subscription_to_user=subscription_to_user
-        ).exists():
-            data = {'detail': 'You are already following this user'}
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        subscription_to_user = self._get_user()
+        data = {
+            'user_id': user.id,
+            'subscription_to_user_id': subscription_to_user.id,
+        }
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
         serializer.save(user=user, subscription_to_user=subscription_to_user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -119,9 +113,8 @@ class SubscribeViewSet(ModelViewSet):
         if subscription:
             subscription.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            data = {
-                'detail':
-                'You cannot delete a subscription you are not subscribed to'
-            }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        data = {
+            'detail':
+            'You cannot delete a subscription you are not subscribed to'
+        }
+        return Response(data, status=status.HTTP_400_BAD_REQUEST, )

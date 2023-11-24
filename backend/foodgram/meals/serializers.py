@@ -1,12 +1,24 @@
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
-from .utils import Base64ImageField, check_ingredients_and_tags
-from .models import (
-    Recipe, Tag, Product, Ingredient,
-    IngredientRecipe, TagRecipe, Favorite, ShoppingCart
-)
-from users.serializers import UserSerializer
 from django.db import models
+from rest_framework import serializers
+
+from users.serializers import UserSerializer
+
+from .models import (
+    Favorite,
+    Ingredient,
+    IngredientRecipe,
+    Product,
+    Recipe,
+    ShoppingCart,
+    Tag,
+    TagRecipe
+)
+from .utils import (
+    Base64ImageField,
+    check_ingredients_and_tags,
+    create_ingredients
+)
 
 User = get_user_model()
 
@@ -109,16 +121,11 @@ class RecipeSerializerForWrite(serializers.ModelSerializer):
         recipe = Recipe.objects.create(
             **validated_data, author=self.context['request'].user
         )
-        for ingredient_ord_dict in ingredients_ord_dict:
-            ingredient, stat = Ingredient.objects.get_or_create(
-                product=ingredient_ord_dict['id'],
-                amount=ingredient_ord_dict['amount']
-            )
-            IngredientRecipe.objects.create(
-                ingredient=ingredient, recipe=recipe
-            )
+        create_ingredients(ingredients_ord_dict, recipe)
+        tags_list = []
         for tag in tags:
-            TagRecipe.objects.create(tag=tag, recipe=recipe)
+            tags_list.append(TagRecipe(tag=tag, recipe=recipe))
+        TagRecipe.objects.bulk_create(tags_list)
         return recipe
 
     def update(self, instance, validated_data):
@@ -132,20 +139,11 @@ class RecipeSerializerForWrite(serializers.ModelSerializer):
             instance.cooking_time
         )
         instance.save()
-        IngredientRecipe.objects.filter(recipe=instance).delete()
-        TagRecipe.objects.filter(recipe=instance).delete()
-        ingredients_ord_dict = validated_data.pop('ingredients')
         tags = validated_data.pop('tags')
-        for ingredient_ord_dict in ingredients_ord_dict:
-            ingredient, status = Ingredient.objects.get_or_create(
-                product=ingredient_ord_dict['id'],
-                amount=ingredient_ord_dict['amount']
-            )
-            IngredientRecipe.objects.create(
-                ingredient=ingredient, recipe=instance
-            )
-        for tag in tags:
-            TagRecipe.objects.create(tag=tag, recipe=instance)
+        instance.tags.set(tags)
+        ingredients_ord_dict = validated_data.pop('ingredients')
+        IngredientRecipe.objects.filter(recipe=instance).delete()
+        create_ingredients(ingredients_ord_dict, instance)
         return instance
 
 
