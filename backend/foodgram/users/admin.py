@@ -4,6 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import Subscription, User
 
 
+@admin.register(User)
 class UserAdmin(UserAdmin):
     list_display = (
         'username',
@@ -14,12 +15,9 @@ class UserAdmin(UserAdmin):
     list_filter = ('username', 'email')
 
 
+@admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = (
         'user',
         'subscription_to_user',
     )
-
-
-admin.site.register(User, UserAdmin)
-admin.site.register(Subscription, SubscriptionAdmin)

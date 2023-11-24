@@ -30,17 +30,17 @@ nano .env.example
 Запустите Docker Compose:
 
 ```
-docker compose -f docker-compose.production.yml up -d
+sudo docker compose -f docker-compose.production.yml up -d
 ```
 
 Соберите и переложите статику бэкенда:
 
 ```
-docker compose -f docker-compose.production.yml exec backend python manage.py collectstatic
+sudo docker compose -f docker-compose.production.yml exec backend python manage.py collectstatic
 ```
 
 ```
-docker compose -f docker-compose.production.yml exec backend cp -r /app/collected_static/. /backend_static/static/
+sudo docker compose -f docker-compose.production.yml exec backend cp -r /app/collected_static/. /backend_static/static/
 ```
 
 Выполните миграции:

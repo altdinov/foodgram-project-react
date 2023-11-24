@@ -16,10 +16,16 @@ class Command(BaseCommand):
                 delimiter=",",
                 quotechar='"'
             )
-
+            num_of_records = 0
             for row in reader:
                 if "ingredients.csv" in csv_file_name:
-                    Product.objects.create(
+                    _product, created = Product.objects.get_or_create(
                         name=row["name"],
                         measurement_unit=row["measurement_unit"]
                     )
+                    if created:
+                        num_of_records += 1
+
+            self.stdout.write(
+                f"Import complited, {num_of_records} records imported"
+            )

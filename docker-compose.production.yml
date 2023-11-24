@@ -17,6 +17,8 @@ services:
     volumes:
       - static:/backend_static
       - media:/app/media/
+    depends_on:
+      - db
   frontend:
     image: altdinov/foodgram_frontend
     env_file: .env

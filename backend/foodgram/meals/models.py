@@ -26,6 +26,7 @@ class Tag(models.Model):
     )
 
     class Meta:
+        ordering = ('id',)
         verbose_name = 'Tag'
         verbose_name_plural = 'Tags'
 
@@ -47,6 +48,7 @@ class Product(models.Model):
     )
 
     class Meta:
+        ordering = ('id',)
         verbose_name = 'Ingredient'
         verbose_name_plural = 'Ingredients'
 
@@ -76,6 +78,7 @@ class Ingredient(models.Model):
     )
 
     class Meta:
+        ordering = ('id',)
         verbose_name = 'Ingredient with quantities'
         verbose_name_plural = 'Ingredients with quantities'
 
@@ -133,6 +136,7 @@ class Recipe(models.Model):
     )
 
     class Meta:
+        ordering = ('-id',)
         verbose_name = 'Recipe'
         verbose_name_plural = 'Recipes'
 
@@ -156,6 +160,7 @@ class IngredientRecipe(models.Model):
     )
 
     class Meta:
+        ordering = ('id',)
         verbose_name = 'IngredientRecipe'
         verbose_name_plural = 'IngredientRecipe'
 
@@ -176,6 +181,7 @@ class TagRecipe(models.Model):
     )
 
     class Meta:
+        ordering = ('id',)
         verbose_name = 'TagRecipe'
         verbose_name_plural = 'TagRecipe'
 
@@ -198,6 +204,7 @@ class Favorite(models.Model):
     )
 
     class Meta:
+        ordering = ('-id',)
         verbose_name = 'Favorite'
         verbose_name_plural = 'Favorites'
 
@@ -220,5 +227,6 @@ class ShoppingCart(models.Model):
     )
 
     class Meta:
+        ordering = ('-id',)
         verbose_name = 'ShoppingCart'
         verbose_name_plural = 'ShoppingCarts'

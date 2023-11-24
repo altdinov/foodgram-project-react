@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from meals.models import Recipe
 from meals.utils import Base64ImageField
@@ -110,3 +111,32 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 author=obj.subscription_to_user)[:int(recipes_limit)]
         serializer = RecipeSerializerForSubscription(recipes, many=True)
         return serializer.data
+
+
+class SubscribeSerializer(serializers.ModelSerializer):
+    """Subscribe serializer"""
+    user_id = serializers.IntegerField()
+    subscription_to_user_id = serializers.IntegerField()
+
+    class Meta:
+        model = Subscription
+        fields = ('user_id', 'subscription_to_user_id')
+
+    def to_representation(self, value):
+        serializer = SubscriptionSerializer(value, context=self.context)
+        return serializer.data
+
+    def validate(self, data):
+        user = User.objects.get(id=data.get('user_id'))
+        subscription_to_user = User.objects.get(
+            id=data.get('subscription_to_user_id')
+        )
+        if subscription_to_user == user:
+            data = {'detail': "You can't subscribe to yourself"}
+            raise ValidationError(data)
+        if Subscription.objects.filter(
+            user=user, subscription_to_user=subscription_to_user
+        ).exists():
+            data = {'detail': 'You are already following this user'}
+            raise ValidationError(data)
+        return data

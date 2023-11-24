@@ -22,6 +22,7 @@ class TagRecipeInline(admin.StackedInline):
     extra = 0
 
 
+@admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
     list_display = (
         'name',
@@ -30,6 +31,7 @@ class TagAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(Ingredient)
 class IngredientAdmin(admin.ModelAdmin):
     list_display = (
         'product',
@@ -37,6 +39,7 @@ class IngredientAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'name',
@@ -44,9 +47,9 @@ class ProductAdmin(admin.ModelAdmin):
     )
     list_filter = ('name',)
     search_fields = ('name',)
-    ordering = ['id']
 
 
+@admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
     list_display = (
         'author',
@@ -64,23 +67,17 @@ class RecipeAdmin(admin.ModelAdmin):
         return obj.favorites.all().count()
 
 
-class FavoritAdmin(admin.ModelAdmin):
+@admin.register(Favorite)
+class FavoriteAdmin(admin.ModelAdmin):
     list_display = (
         'user',
         'recipe',
     )
 
 
+@admin.register(ShoppingCart)
 class ShoppingCartAdmin(admin.ModelAdmin):
     list_display = (
         'user',
         'recipe',
     )
-
-
-admin.site.register(Tag, TagAdmin)
-admin.site.register(Ingredient, IngredientAdmin)
-admin.site.register(Recipe, RecipeAdmin)
-admin.site.register(Product, ProductAdmin)
-admin.site.register(Favorite, FavoritAdmin)
-admin.site.register(ShoppingCart, ShoppingCartAdmin)
