@@ -138,7 +138,7 @@ class FavoriteAndShopCartMixin:
         user = request.user
         favorite = self.use_model.objects.filter(
             recipe=recipe, user=user
-            ).first()
+        ).first()
         if favorite:
             favorite.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
