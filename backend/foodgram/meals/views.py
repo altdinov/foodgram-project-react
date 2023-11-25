@@ -98,8 +98,8 @@ class RecipeViewSet(mixins.ListModelMixin,
         else:
             is_favorited = Favorite.objects.none()
             is_in_shopping_cart = ShoppingCart.objects.none()
-        return Recipe.objects.all().prefetch_related(
-            'author', 'tags', 'ingredients', 'ingredients__product').annotate(
+        return Recipe.objects.all().select_related('author').prefetch_related(
+            'tags', 'ingredients', 'ingredients__product').annotate(
             is_favorited=models.Exists(is_favorited),
             is_in_shopping_cart=models.Exists(is_in_shopping_cart)
         )
@@ -136,14 +136,14 @@ class FavoriteAndShopCartMixin:
     def delete(self, request, *args, **kwargs):
         recipe = self._get_recipe()
         user = request.user
-        favorite = self.use_model.objects.filter(
+        deleted_object = self.use_model.objects.filter(
             recipe=recipe, user=user
         ).first()
-        if favorite:
-            favorite.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        data = {'detail': self.cannot_remove_text}
-        return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        if deleted_object is None:
+            data = {'detail': self.cannot_remove_text}
+            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        deleted_object.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class FavoriteViewSet(FavoriteAndShopCartMixin, ModelViewSet):

@@ -50,17 +50,17 @@ class UserViewSet(mixins.ListModelMixin,
 def change_password(request):
     """API View for change password, endpoint users/set_password/"""
     serializer = ChangePasswordSerializer(data=request.data)
-    if serializer.is_valid():
-        user = request.user
-        if user.check_password(serializer.data.get('current_password')):
-            user.set_password(serializer.data.get('new_password'))
-            user.save()
-            update_session_auth_hash(request, user)
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(
-            {'error': 'Incorrect old password.'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    serializer.is_valid(raise_exception=True)
+    user = request.user
+    if user.check_password(serializer.data.get('current_password')):
+        user.set_password(serializer.data.get('new_password'))
+        user.save()
+        update_session_auth_hash(request, user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(
+        {'error': 'Incorrect old password.'},
+        status=status.HTTP_400_BAD_REQUEST
+    )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -74,8 +74,7 @@ class SubscriptionViewSet(mixins.ListModelMixin,
     pagination_class = PaginationWithLimit
 
     def get_queryset(self):
-        subscriptions = Subscription.objects.filter(user=self.request.user)
-        return subscriptions
+        return Subscription.objects.filter(user=self.request.user)
 
 
 class SubscribeViewSet(ModelViewSet):
@@ -110,11 +109,11 @@ class SubscribeViewSet(ModelViewSet):
         subscription = Subscription.objects.filter(
             user=user, subscription_to_user=subscription_to_user
         ).first()
-        if subscription:
-            subscription.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        data = {
-            'detail':
-            'You cannot delete a subscription you are not subscribed to'
-        }
-        return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        if subscription is None:
+            data = {
+                'detail':
+                'You cannot delete a subscription you are not subscribed to'
+            }
+            return Response(data, status=status.HTTP_400_BAD_REQUEST, )
+        subscription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
